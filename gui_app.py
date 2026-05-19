@@ -7,112 +7,95 @@ class SimulationApp:
     def __init__(self, root, db_handler):
         self.root = root
         self.db = db_handler
-        self.root.title("SIMULATOR - File Comparison Tool")
-        self.root.geometry("1100x700")
+        self.root.title("ADVANCED SIMULATOR V3.0")
+        self.root.geometry("1100x750")
 
-        # Cấu hình màu sắc
+        # Theme màu tối
         self.color_bg = "#1a1a1a"
         self.color_sidebar = "#252525"
-        self.color_accent = "#2ecc71"
-        self.color_primary = "#ffffff"
+        self.color_accent = "#2ecc71"  # Xanh lá cho Start
+        self.color_danger = "#e74c3c"  # Đỏ cho Delete
+
+        self.file1_path = ""
+        self.file2_path = ""
 
         self.setup_ui()
 
     def setup_ui(self):
-        # Chia layout chính thành 2 cột: Sidebar và Main Area
+        self.root.configure(fg_color=self.color_bg)
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
-        self.root.configure(fg_color=self.color_bg)
 
-        # --- SIDEBAR (Bên trái) ---
-        self.sidebar = ctk.CTkFrame(self.root, width=240, corner_radius=0, fg_color=self.color_sidebar)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        # --- SIDEBAR ---
+        sidebar = ctk.CTkFrame(self.root, width=220, corner_radius=0, fg_color=self.color_sidebar)
+        sidebar.grid(row=0, column=0, sticky="nsew")
 
-        ctk.CTkLabel(self.sidebar, text="SIMULATOR", text_color=self.color_accent,
-                     font=("Arial", 24, "bold")).pack(pady=(40, 5))
-        ctk.CTkLabel(self.sidebar, text="V3.0 REAL-TIME", text_color="#64748B",
-                     font=("Arial", 11, "bold")).pack(pady=(0, 40))
+        ctk.CTkLabel(sidebar, text="CONTROL PANEL", font=("Arial", 20, "bold")).pack(pady=(30, 20))
 
-        # Nút chọn File 1
-        self.btn_file1 = ctk.CTkButton(self.sidebar, text="📂 Chọn File 1",
-                                       command=lambda: self.select_file(1))
-        self.btn_file1.pack(pady=10, padx=20)
+        # Nút chọn file
+        ctk.CTkButton(sidebar, text="📂 Chọn File 1", command=lambda: self.pick_file(1)).pack(pady=10, padx=20)
+        ctk.CTkButton(sidebar, text="📂 Chọn File 2", command=lambda: self.pick_file(2)).pack(pady=10, padx=20)
 
-        # Nút chọn File 2
-        self.btn_file2 = ctk.CTkButton(self.sidebar, text="📂 Chọn File 2",
-                                       command=lambda: self.select_file(2))
-        self.btn_file2.pack(pady=10, padx=20)
+        # Nút chức năng chính
+        ctk.CTkButton(sidebar, text="▶ START ANALYSIS", fg_color=self.color_accent,
+                      hover_color="#27ae60", command=self.run_analysis).pack(pady=(40, 10), padx=20)
 
-        # Nút Chạy phân tích
-        self.btn_run = ctk.CTkButton(self.sidebar, text="▶ START ANALYSIS",
-                                     fg_color=self.color_accent, hover_color="#27ae60",
-                                     command=self.process_analysis)
-        self.btn_run.pack(pady=30, padx=20)
+        ctk.CTkButton(sidebar, text="🗑 Delete Latest", fg_color=self.color_danger,
+                      hover_color="#c0392b", command=self.delete_latest).pack(pady=10, padx=20)
 
-        # --- MAIN AREA (Vùng hiển thị nội dung bên phải) ---
-        self.main_area = ctk.CTkFrame(self.root, fg_color="transparent")
-        self.main_area.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        self.main_area.grid_columnconfigure((0, 1), weight=1)
-        self.main_area.grid_rowconfigure(1, weight=1)
+        ctk.CTkButton(sidebar, text="🔄 Undo Restore", command=self.undo_restore).pack(pady=10, padx=20)
 
-        # Tiêu đề khung nội dung
-        ctk.CTkLabel(self.main_area, text="NỘI DUNG FILE 1", font=("Arial", 13, "bold")).grid(row=0, column=0,
-                                                                                              pady=(0, 10))
-        ctk.CTkLabel(self.main_area, text="NỘI DUNG FILE 2", font=("Arial", 13, "bold")).grid(row=0, column=1,
-                                                                                              pady=(0, 10))
+        # --- MAIN AREA ---
+        main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        main_frame.grid_columnconfigure((0, 1), weight=1)
+        main_frame.grid_rowconfigure(1, weight=1)
 
-        # Khung văn bản hiển thị File 1
-        self.txt_display1 = ctk.CTkTextbox(self.main_area, font=("Consolas", 12))
-        self.txt_display1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        # Headers
+        ctk.CTkLabel(main_frame, text="NỘI DUNG FILE 1", font=("Arial", 12, "bold")).grid(row=0, column=0)
+        ctk.CTkLabel(main_frame, text="NỘI DUNG FILE 2", font=("Arial", 12, "bold")).grid(row=0, column=1)
 
-        # Khung văn bản hiển thị File 2
-        self.txt_display2 = ctk.CTkTextbox(self.main_area, font=("Consolas", 12))
-        self.txt_display2.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        # Textboxes
+        self.txt1 = ctk.CTkTextbox(main_frame, font=("Consolas", 12))
+        self.txt1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
-        # Khung hiển thị kết quả nhanh bên dưới
-        self.status_label = ctk.CTkLabel(self.main_area, text="Trạng thái: Sẵn sàng", font=("Arial", 12))
-        self.status_label.grid(row=2, column=0, columnspan=2, pady=10)
+        self.txt2 = ctk.CTkTextbox(main_frame, font=("Consolas", 12))
+        self.txt2.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
 
-        # Lưu đường dẫn file
-        self.file1_path = ""
-        self.file2_path = ""
+        # Status
+        self.status = ctk.CTkLabel(main_frame, text="Status: Ready", text_color="#64748B")
+        self.status.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def select_file(self, file_num):
-        path = filedialog.askopenfilename(title=f"Chọn file thứ {file_num}",
-                                          filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+    def pick_file(self, num):
+        path = filedialog.askopenfilename()
         if path:
-            if file_num == 1:
+            if num == 1:
                 self.file1_path = path
-                self.read_and_display(path, self.txt_display1)
-                self.btn_file1.configure(text=f"✔ {os.path.basename(path)}")
+                self.load_text(path, self.txt1)
             else:
                 self.file2_path = path
-                self.read_and_display(path, self.txt_display2)
-                self.btn_file2.configure(text=f"✔ {os.path.basename(path)}")
+                self.load_text(path, self.txt2)
 
-    def read_and_display(self, path, textbox):
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                content = f.read()
-                textbox.delete("1.0", "end")
-                textbox.insert("1.0", content)
-        except Exception as e:
-            messagebox.showerror("Lỗi", f"Không thể đọc file: {e}")
+    def load_text(self, path, widget):
+        with open(path, 'r', encoding='utf-8') as f:
+            widget.delete("1.0", "end")
+            widget.insert("1.0", f.read())
 
-    def process_analysis(self):
-        if not self.file1_path or not self.file2_path:
-            messagebox.showwarning("Cảnh báo", "Vui lòng chọn đủ 2 file để phân tích!")
-            return
+    def run_analysis(self):
+        if self.file1_path and self.file2_path:
+            name = f"{os.path.basename(self.file1_path)} vs {os.path.basename(self.file2_path)}"
+            self.db.add_result(name, 92.0)  # Ví dụ 92%
+            self.status.configure(text=f"Saved: {name} (92%)", text_color=self.color_accent)
+            messagebox.showinfo("Success", "Đã lưu kết quả vào Database!")
+        else:
+            messagebox.showwarning("Warning", "Vui lòng chọn đủ 2 file!")
 
-        # Giả lập logic tính toán tỉ lệ khớp (Bạn có thể thay bằng logic thực tế)
-        match_rate = 85.5  # Ví dụ kết quả
-        file_name = f"{os.path.basename(self.file1_path)} vs {os.path.basename(self.file2_path)}"
+    def delete_latest(self):
+        self.db.soft_delete_latest()
+        self.status.configure(text="Status: Deleted latest entry", text_color=self.color_danger)
+        messagebox.showinfo("Deleted", "Đã xóa tạm thời. Nhấn Undo để khôi phục.")
 
-        # Lưu vào database (Sử dụng database_handler của bạn)
-        try:
-            self.db.add_result(file_name, match_rate)
-            self.status_label.configure(text=f"Kết quả: Khớp {match_rate}% - Đã lưu vào Database!",
-                                        text_color=self.color_accent)
-            messagebox.showinfo("Thành công", "Phân tích hoàn tất và đã lưu vào database!")
-        except Exception as e:
-            messagebox.showerror("Lỗi Database", f"Không thể lưu kết quả: {e}")
+    def undo_restore(self):
+        self.db.restore_latest()
+        self.status.configure(text="Status: Restored successfully!", text_color=self.color_accent)
+        messagebox.showinfo("Restored", "Đã khôi phục dữ liệu!")

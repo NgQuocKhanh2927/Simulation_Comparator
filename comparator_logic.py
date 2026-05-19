@@ -26,7 +26,7 @@ def run_comparison(path_g, path_t):
                 if df_g.iloc[r, c] != df_t.iloc[r, c]:
                     col_name = df_g.columns[c] #lấy tên của cột đang bị lỗi
                     val_g = df_g.iloc[r, c] #giá trị đúng (Golden)
-                    val_t = df_t.iloc[r, c] #giá trị sai (Test)
+                    val_t = df_t.iloc[r, c] # Giá trị sai (Test)
 
                     diff_points.append(f"• Hàng {r + 1}, Cột '{col_name}': Gốc={val_g} vs Test={val_t}")
 

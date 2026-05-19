@@ -1,10 +1,9 @@
 import customtkinter as ctk
 from gui_app import SimulationApp
+from database_handler import DBHandler
 
 if __name__ == "__main__":
+    db = DBHandler()
     root = ctk.CTk()
-    root.title("Simulation")
-    root.geometry("1100x700")
-
-    app = SimulationApp(root)
+    app = SimulationApp(root, db)
     root.mainloop()
