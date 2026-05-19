@@ -1,4 +1,4 @@
-import sqlite3 # Thư viện dùng để làm việc với SQLite (một loại DB nhẹ, không cần cài đặt server)
+import sqlite3 # Thư viện dùng để làm việc với SQLite
 from datetime import datetime # Thư viện dùng để lấy thời gian thực từ máy tính
 
 class DBHandler:
