@@ -11,6 +11,9 @@
   </component>
   <component name="DBNavigator.Project.DatabaseAssistantManager">
     <assistants>
+      <assistant-state connection-id="e50f3ac6-2ebd-4ec1-b917-0522500275d7" assistant-type="PUBLIC" default-profile-name="" selected-chat-id="" availability="AVAILABLE" acknowledgement="NONE" selected="true">
+        <tools />
+      </assistant-state>
       <assistant-state connection-id="004f2c13-ae19-42a5-b3c3-ac56951722e5" assistant-type="SELECT_AI" default-profile-name="" selected-chat-id="" availability="UNAVAILABLE" acknowledgement="NONE">
         <tools />
       </assistant-state>
@@ -35,17 +38,15 @@
     <loaded-nodes />
   </component>
   <component name="DBNavigator.Project.DatabaseConsoleManager">
-    <connection id="004f2c13-ae19-42a5-b3c3-ac56951722e5">
-      <console name="Connection" type="STANDARD" schema="" session="Main" />
+    <connection id="e50f3ac6-2ebd-4ec1-b917-0522500275d7">
+      <console name="Connection" type="STANDARD" schema="simulation_pro" session="Main" />
     </connection>
   </component>
   <component name="DBNavigator.Project.DatabaseEditorStateManager">
     <last-used-providers />
   </component>
   <component name="DBNavigator.Project.DatabaseFileManager">
-    <open-files>
-      <object connection-id="004f2c13-ae19-42a5-b3c3-ac56951722e5" object-ref="consoles/Connection" />
-    </open-files>
+    <open-files />
   </component>
   <component name="DBNavigator.Project.DatabasePrerequisiteManager">
     <prerequisites />
@@ -70,18 +71,28 @@
   </component>
   <component name="DBNavigator.Project.Settings">
     <connections>
-      <connection source-id="" id="004f2c13-ae19-42a5-b3c3-ac56951722e5" active="true" signed="true">
+      <connection source-id="" id="e50f3ac6-2ebd-4ec1-b917-0522500275d7" active="true" signed="true">
         <database>
           <name value="Connection" />
           <description value="" />
           <database-type value="SQLITE" />
           <config-type value="BASIC" />
-          <database-version value="9999.0" />
+          <database-version value="3.5" />
           <driver-source value="BUNDLED" />
           <driver-library value="" />
           <driver value="" />
-          <url-type value="CUSTOM" />
-          <url value="C:\Users\ASUS\PycharmProjects\Simulation_Comparator" />
+          <url-type value="FILE" />
+          <host value="" />
+          <port value="" />
+          <database value="" />
+          <tns-folder value="" />
+          <tns-profile value="" />
+          <server-type value="" />
+          <protocol value="" />
+          <url-parameters />
+          <files>
+            <file path="simulation_pro.db" schema="simulation_pro" />
+          </files>
           <type value="NONE" />
           <user value="" />
           <token-type value="" />

@@ -1,101 +1,232 @@
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import os
+import tkinter as tk
+from tkinter import ttk, filedialog, scrolledtext, messagebox
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.ticker import MaxNLocator
+from comparator_logic import compare_files_logic
+from database_handler import HistoryManager
 
 
-class SimulationApp:
-    def __init__(self, root, db_handler):
+class SimulationProApp:
+    def __init__(self, root):
         self.root = root
-        self.db = db_handler
-        self.root.title("ADVANCED SIMULATOR V3.0")
-        self.root.geometry("1100x750")
+        self.root.title("Simulation Core Pro v3.0 - Professional Edition")
+        self.root.geometry("1300x950")
+        self.root.configure(bg="#f4f7f9")
 
-        # Theme màu tối
-        self.color_bg = "#1a1a1a"
-        self.color_sidebar = "#252525"
-        self.color_accent = "#2ecc71"  # Xanh lá cho Start
-        self.color_danger = "#e74c3c"  # Đỏ cho Delete
+        self.history_mgr = HistoryManager()
+        self.g_pts, self.t_pts = [], []
+        self.current_fname = "N/A"
 
-        self.file1_path = ""
-        self.file2_path = ""
-
+        self.setup_styles()
         self.setup_ui()
 
+        # PHÍM TẮT (HOTKEYS)
+        self.root.bind("<Control-Return>", lambda e: self.run_analysis())  # Ctrl + Enter để chạy
+        self.root.bind("<Control-s>", lambda e: self.history_mgr.export_excel())  # Ctrl + S để xuất Excel
+
+        # Nạp dữ liệu cũ
+        self.refresh_tree()
+
+    def setup_styles(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("Treeview", font=("Arial", 11), rowheight=35)
+        style.configure("Treeview.Heading", font=("Arial", 12, "bold"))
+
     def setup_ui(self):
-        self.root.configure(fg_color=self.color_bg)
-        self.root.grid_columnconfigure(1, weight=1)
-        self.root.grid_rowconfigure(0, weight=1)
+        # SIDEBAR
+        sidebar = tk.Frame(self.root, width=250, bg="white", highlightbackground="#e0e0e0", highlightthickness=1)
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
 
-        # --- SIDEBAR ---
-        sidebar = ctk.CTkFrame(self.root, width=220, corner_radius=0, fg_color=self.color_sidebar)
-        sidebar.grid(row=0, column=0, sticky="nsew")
+        tk.Label(sidebar, text="SIMULATOR", font=("Arial", 22, "bold"), fg="#1a73e8", bg="white").pack(pady=(40, 5))
+        tk.Label(sidebar, text="PROFESSIONAL EDITION", font=("Arial", 10, "bold"), fg="#95a5a6", bg="white").pack(
+            pady=(0, 40))
 
-        ctk.CTkLabel(sidebar, text="CONTROL PANEL", font=("Arial", 20, "bold")).pack(pady=(30, 20))
+        btn_opt = {"font": ("Arial", 11, "bold"), "relief": "flat", "pady": 15, "cursor": "hand2"}
+        tk.Button(sidebar, text="▶ START ANALYSIS", bg="#00b894", fg="white", command=self.run_analysis,
+                  **btn_opt).pack(fill=tk.X, padx=20, pady=10)
+        tk.Button(sidebar, text="📊 VIEW DASHBOARD", bg="white", fg="#1a73e8", highlightthickness=1,
+                  command=self.show_dashboard, **btn_opt).pack(fill=tk.X, padx=20, pady=5)
+        tk.Button(sidebar, text="📥 EXPORT EXCEL", bg="white", fg="#636e72", highlightthickness=1,
+                  command=self.history_mgr.export_excel, **btn_opt).pack(fill=tk.X, padx=20, pady=5)
 
-        # Nút chọn file
-        ctk.CTkButton(sidebar, text="📂 Chọn File 1", command=lambda: self.pick_file(1)).pack(pady=10, padx=20)
-        ctk.CTkButton(sidebar, text="📂 Chọn File 2", command=lambda: self.pick_file(2)).pack(pady=10, padx=20)
+        # MAIN CONTENT
+        main = tk.Frame(self.root, bg="#f4f7f9")
+        main.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=30, pady=20)
+        main.rowconfigure(1, weight=1)
+        main.columnconfigure(0, weight=1)
 
-        # Nút chức năng chính
-        ctk.CTkButton(sidebar, text="▶ START ANALYSIS", fg_color=self.color_accent,
-                      hover_color="#27ae60", command=self.run_analysis).pack(pady=(40, 10), padx=20)
+        # 1. FILE CONFIGURATION
+        cfg = tk.LabelFrame(main, text=" File Configuration ", bg="white", font=("Arial", 14, "bold"), padx=15, pady=15)
+        cfg.grid(row=0, column=0, sticky="ew", pady=(0, 20))
+        cfg.columnconfigure((0, 1), weight=1)
 
-        ctk.CTkButton(sidebar, text="🗑 Delete Latest", fg_color=self.color_danger,
-                      hover_color="#c0392b", command=self.delete_latest).pack(pady=10, padx=20)
+        self.txt_golden = self.create_editor(cfg, "Golden Reference", 0, self.load_g)
+        self.txt_test = self.create_editor(cfg, "Test Subject", 1, self.load_t)
 
-        ctk.CTkButton(sidebar, text="🔄 Undo Restore", command=self.undo_restore).pack(pady=10, padx=20)
+        # 2. EXECUTION HISTORY
+        hist = tk.LabelFrame(main, text=" Execution History ", bg="white", font=("Arial", 14, "bold"), padx=15, pady=15)
+        hist.grid(row=1, column=0, sticky="nsew")
 
-        # --- MAIN AREA ---
-        main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        main_frame.grid_columnconfigure((0, 1), weight=1)
-        main_frame.grid_rowconfigure(1, weight=1)
+        # THANH TÌM KIẾM (SEARCH BAR)
+        search_fm = tk.Frame(hist, bg="white")
+        search_fm.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(search_fm, text="🔍 Search File:", bg="white", font=("Arial", 11)).pack(side=tk.LEFT)
+        self.ent_search = tk.Entry(search_fm, font=("Arial", 11))
+        self.ent_search.pack(side=tk.LEFT, padx=10, fill=tk.X, expand=True)
+        self.ent_search.bind("<KeyRelease>", self.filter_history)
 
-        # Headers
-        ctk.CTkLabel(main_frame, text="NỘI DUNG FILE 1", font=("Arial", 12, "bold")).grid(row=0, column=0)
-        ctk.CTkLabel(main_frame, text="NỘI DUNG FILE 2", font=("Arial", 12, "bold")).grid(row=0, column=1)
+        tool = tk.Frame(hist, bg="white")
+        tool.pack(fill=tk.X)
+        tk.Button(tool, text="Restore List", bg="#636e72", fg="white", font=("Arial", 10, "bold"),
+                  command=self.show_restore).pack(side=tk.RIGHT, padx=5)
+        tk.Button(tool, text="Delete Selected", bg="#ff7675", fg="white", font=("Arial", 10, "bold"),
+                  command=self.delete_item).pack(side=tk.RIGHT)
 
-        # Textboxes
-        self.txt1 = ctk.CTkTextbox(main_frame, font=("Consolas", 12))
-        self.txt1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
+        self.tree = ttk.Treeview(hist, columns=("id", "name", "match", "date"), show="headings")
+        for c, h in zip(("id", "name", "match", "date"), ("ID", "FILE NAME", "MATCH %", "DATE MODIFIED")):
+            self.tree.heading(c, text=h)
+            self.tree.column(c, anchor="center")
+        self.tree.pack(fill=tk.BOTH, expand=True, pady=10)
 
-        self.txt2 = ctk.CTkTextbox(main_frame, font=("Consolas", 12))
-        self.txt2.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
+        # 3. SUGGESTION (TÔ MÀU LỖI)
+        tk.Label(hist, text="Gợi ý: các dòng sai lệch ", fg="#d63031", bg="white",
+                 font=("Arial", 11, "bold")).pack(anchor="w")
+        self.txt_diff = scrolledtext.ScrolledText(hist, height=6, bg="#fff5f5", font=("Consolas", 12), borderwidth=0)
+        self.txt_diff.pack(fill=tk.X, pady=(5, 0))
 
-        # Status
-        self.status = ctk.CTkLabel(main_frame, text="Status: Ready", text_color="#64748B")
-        self.status.grid(row=2, column=0, columnspan=2, pady=10)
+        # Định nghĩa các thẻ màu
+        self.txt_diff.tag_config("red", foreground="#d63031", font=("Consolas", 12, "bold"))
+        self.txt_diff.tag_config("blue", foreground="#0984e3", font=("Consolas", 12, "bold"))
+        self.txt_diff.tag_config("green", foreground="#00b894", font=("Consolas", 12, "bold"))
 
-    def pick_file(self, num):
-        path = filedialog.askopenfilename()
-        if path:
-            if num == 1:
-                self.file1_path = path
-                self.load_text(path, self.txt1)
-            else:
-                self.file2_path = path
-                self.load_text(path, self.txt2)
+    def create_editor(self, parent, label, col, cmd):
+        f = tk.Frame(parent, bg="white")
+        f.grid(row=0, column=col, sticky="nsew", padx=10)
+        hdr = tk.Frame(f, bg="white")
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text=label, bg="white", font=("Arial", 12)).pack(side=tk.LEFT)
+        tk.Button(hdr, text="Choose File", font=("Arial", 9), command=cmd).pack(side=tk.RIGHT)
+        t = scrolledtext.ScrolledText(f, height=10, font=("Consolas", 12), relief="solid", borderwidth=1)
+        t.pack(fill=tk.BOTH, expand=True, pady=5)
+        return t
 
-    def load_text(self, path, widget):
-        with open(path, 'r', encoding='utf-8') as f:
-            widget.delete("1.0", "end")
-            widget.insert("1.0", f.read())
+    def refresh_tree(self, data_list=None):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        target = data_list if data_list is not None else self.history_mgr.records
+        for r in target:
+            self.tree.insert("", tk.END, values=r)
+
+    def filter_history(self, event=None):
+        query = self.ent_search.get().lower()
+        filtered = [r for r in self.history_mgr.records if query in r[1].lower()]
+        self.refresh_tree(filtered)
+
+    def load_g(self):
+        p = filedialog.askopenfilename()
+        if p:
+            with open(p, 'r', encoding='utf-8') as f:
+                self.txt_golden.delete(1.0, tk.END)
+                self.txt_golden.insert(tk.END, f.read())
+
+    def load_t(self):
+        p = filedialog.askopenfilename()
+        if p:
+            self.current_fname = p.split('/')[-1]
+            with open(p, 'r', encoding='utf-8') as f:
+                self.txt_test.delete(1.0, tk.END)
+                self.txt_test.insert(tk.END, f.read())
 
     def run_analysis(self):
-        if self.file1_path and self.file2_path:
-            name = f"{os.path.basename(self.file1_path)} vs {os.path.basename(self.file2_path)}"
-            self.db.add_result(name, 92.0)  # Ví dụ 92%
-            self.status.configure(text=f"Saved: {name} (92%)", text_color=self.color_accent)
-            messagebox.showinfo("Success", "Đã lưu kết quả vào Database!")
+        g_raw = self.txt_golden.get(1.0, tk.END)
+        t_raw = self.txt_test.get(1.0, tk.END)
+
+        # Gọi logic so sánh (Đã cải tiến Tuple)
+        pct, diffs, self.g_pts, self.t_pts = compare_files_logic(g_raw, t_raw)
+
+        self.txt_diff.config(state=tk.NORMAL)
+        self.txt_diff.delete(1.0, tk.END)
+
+        if not diffs:
+            self.txt_diff.insert(tk.END, "✓ Dữ liệu khớp hoàn hảo!", "green")
         else:
-            messagebox.showwarning("Warning", "Vui lòng chọn đủ 2 file!")
+            for line_no, g_val, t_val in diffs:
+                if line_no == "...":  # Dòng thông báo giới hạn
+                    self.txt_diff.insert(tk.END, f"{g_val}\n")
+                    break
+                self.txt_diff.insert(tk.END, f"• Dòng {line_no}: ", "normal")
+                self.txt_diff.insert(tk.END, f"Golden[{g_val}]", "blue")
+                self.txt_diff.insert(tk.END, " ≠ ", "normal")
+                self.txt_diff.insert(tk.END, f"Test[{t_val}]\n", "red")
 
-    def delete_latest(self):
-        self.db.soft_delete_latest()
-        self.status.configure(text="Status: Deleted latest entry", text_color=self.color_danger)
-        messagebox.showinfo("Deleted", "Đã xóa tạm thời. Nhấn Undo để khôi phục.")
+        self.txt_diff.config(state=tk.DISABLED)
 
-    def undo_restore(self):
-        self.db.restore_latest()
-        self.status.configure(text="Status: Restored successfully!", text_color=self.color_accent)
-        messagebox.showinfo("Restored", "Đã khôi phục dữ liệu!")
+        rec = self.history_mgr.add_record(self.current_fname, pct)
+        self.refresh_tree()
+
+    def delete_item(self):
+        for s in self.tree.selection():
+            val = list(self.tree.item(s)['values'])
+            self.history_mgr.move_to_trash(val)
+            self.tree.delete(s)
+
+    def show_restore(self):
+        if not self.history_mgr.trash:
+            messagebox.showinfo("Trống", "Thùng rác đang trống!")
+            return
+        win = tk.Toplevel(self.root)
+        win.title("Restore List")
+        win.geometry("500x400")
+        lb = tk.Listbox(win, width=60, font=("Arial", 11))
+        lb.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+        for r in self.history_mgr.trash:
+            lb.insert(tk.END, f"ID {r[0]}: {r[1]} - {r[2]}")
+
+        def do_res():
+            if lb.curselection():
+                idx = lb.curselection()[0]
+                rec_id = self.history_mgr.trash[idx][0]
+                res = self.history_mgr.restore_specific(rec_id)
+                self.refresh_tree()
+                win.destroy()
+
+        tk.Button(win, text="Restore Selected Item", font=("Arial", 10, "bold"), command=do_res, pady=10).pack(pady=10)
+
+    def show_dashboard(self):
+        if not self.g_pts:
+            messagebox.showwarning(title="Lỗi", message="Vui lòng START ANALYSIS trước!")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("View Dashboard")
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        indices = list(range(1, len(self.g_pts) + 1))
+        ax.plot(indices, self.g_pts, label="Golden", color="black", linewidth=2, marker='o', markersize=4)
+        ax.plot(indices, self.t_pts, label="Test", color="#ff4757", linestyle="--", linewidth=2, marker='x',
+                markersize=5)
+
+        ax.set_xticks(indices)
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        ax.set_title("So sánh số liệu Golden vs Test", fontdict={'fontsize': 14, 'fontweight': 'bold'})
+        ax.set_xlabel("Dòng dữ liệu (Time Index)")
+        ax.set_ylabel("Giá trị (Value)")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+
+        # NÚT LƯU ẢNH DASHBOARD
+        def save_img():
+            path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG", "*.png")])
+            if path:
+                fig.savefig(path)
+                messagebox.showinfo("Thành công", "Đã lưu ảnh Dashboard!")
+
+        btn_save = tk.Button(win, text="📸 Save Dashboard as Image", command=save_img, bg="#1a73e8", fg="white",
+                             font=("Arial", 10, "bold"))
+        btn_save.pack(pady=5)
+
+        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)

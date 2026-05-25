@@ -1,38 +1,40 @@
-import pandas as pd
+def compare_files_logic(golden_text, test_text):
+    # Loại bỏ khoảng trắng thừa (Ignore Whitespace)
+    g_lines = [l.strip() for l in golden_text.strip().splitlines() if l.strip()]
+    t_lines = [l.strip() for l in test_text.strip().splitlines() if l.strip()]
 
-def run_comparison(path_g, path_t):
+    # Trừ dòng tiêu đề
+    g_data = g_lines[1:] if len(g_lines) > 0 else []
+    t_data = t_lines[1:] if len(t_lines) > 0 else []
 
-    try:
+    max_len = len(g_data)
+    matches = 0
+    diffs = []
+    g_pts, t_pts = [], []
 
-        df_g = pd.read_csv(path_g)
-        df_t = pd.read_csv(path_t)
+    # Giới hạn tìm tối đa 50 lỗi
+    MAX_ERRORS = 50
 
-        if df_g.shape != df_t.shape:
-            return 0.0, ["Kích thước file không khớp (Dòng/Cột khác nhau)"]
+    for i in range(max_len):
+        gv = g_data[i]
+        tv = t_data[i] if i < len(t_data) else "MISSING"
 
-        comparison_matrix = (df_g == df_t)
-        match_count = comparison_matrix.values.sum()
-        total_elements = df_g.size
-        # Tỉ lệ
-        rate = round((match_count / total_elements) * 100, 2)
+        if gv == tv:
+            matches += 1
+        else:
+            if len(diffs) < MAX_ERRORS:
+                diffs.append((i + 1, gv, tv))  # Trả về tuple (dòng, giá trị G, giá trị T)
+            elif len(diffs) == MAX_ERRORS:
+                diffs.append(("...", "... [Đã đạt giới hạn 50 lỗi, dừng tìm kiếm]", ""))
 
+        def to_num(s):
+            try:
+                return float(s.split(',')[-1])
+            except:
+                return 0.0
 
-        diff_points = []
-        #từng hàng của bảng
-        for r in range(len(df_g)):
-            #từng cột của bảng
-            for c in range(len(df_g.columns)):
-                # .iloc[r, c] dùng để truy cập giá trị tại hàng , cột
-                if df_g.iloc[r, c] != df_t.iloc[r, c]:
-                    col_name = df_g.columns[c] #lấy tên của cột đang bị lỗi
-                    val_g = df_g.iloc[r, c] #giá trị đúng (Golden)
-                    val_t = df_t.iloc[r, c] # Giá trị sai (Test)
+        g_pts.append(to_num(gv))
+        t_pts.append(to_num(tv) if tv != "MISSING" else 0.0)
 
-                    diff_points.append(f"• Hàng {r + 1}, Cột '{col_name}': Gốc={val_g} vs Test={val_t}")
-
-                if len(diff_points) >= 50: break
-            if len(diff_points) >= 50: break
-
-        return rate, diff_points
-    except Exception as e:
-        return None, [f"Lỗi đọc file: {str(e)}"]
+    match_pct = round((matches / max_len) * 100, 2) if max_len > 0 else 0
+    return match_pct, diffs, g_pts, t_pts
